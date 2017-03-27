@@ -1,0 +1,137 @@
+//---------------------------------------------------------------
+// Nick Simpson
+// Lab 4 P1.7
+// EEL 4742-011
+// 3/21/2017
+//---------------------------------------------------------------
+// Counts up if SW1 is pressed, counts down if SW2 is pressed.
+//---------------------------------------------------------------
+
+#include "msp430fg4618.h"
+#include "stdio.h"
+
+void Init_LCD(void);
+void Sendto_LCD(void);
+
+int n;
+int LCD_SIZE = 11;
+
+//	point to the area of memory containing the LCD segments
+unsigned char *LCDSeg = (unsigned char *) &LCDM3;
+
+volatile int c, d, e;
+volatile int i;
+
+/*	LCD character codes:
+ 0 = 0x5F, 1 = 0x06, 2 = 0x6B, 3 = 0x2F, 4 = 0x36
+ 5 = 0x3D, 6 = 0x7D, 7 = 0x07, 8 = 0x7F, 9 = 0x3F */
+
+unsigned char Char_Code[] = { 
+	0x5F, 0x06, 0x6B, 0x2F, 0x36, 
+	0x3D, 0x7D, 0x07, 0x7F, 0x3F };
+
+int main(void) {
+
+//	stop WDT, initialize LCD, GPIO, and counters
+	WDTCTL = WDTPW + WDTHOLD;
+	P1DIR |= 0;
+	P2DIR |= 2;
+	Init_LCD();
+
+	c = 0;
+	d = 0;
+	e = 0;
+
+	while (1) {
+//---------------------------------------------------------------
+//	Increment function
+//---------------------------------------------------------------
+		while (P1IN == 1) {
+//	increment three digit LCD number while SW1 is pressed
+			c++;
+			if (c == 10) {
+				c = 0;
+				d++;
+				if (d == 10) {
+					d = 0;
+					e++;
+				}
+			}
+//	stop incrementing if max value is reached
+			if (e >= 10) {
+				c = 9;
+				d = 9;
+				e = 9;
+				Sendto_LCD();
+				break;
+			}
+//	stop incrementing if SW1 is no longer pressed
+			if (P1IN != 1) {
+				break;
+			}
+//	send values to LCD, flash LED, and delay
+			Sendto_LCD();
+			P2OUT ^= 0x02;
+			i = 15000;
+			while (i > 0)
+				i--;
+		}
+//---------------------------------------------------------------
+//	Decrement function
+//---------------------------------------------------------------
+		while (P1IN == 2) {
+//	decrement 3 digit number
+			if (c == 0) {
+				c = 10;
+				if (d == 0) {
+					d = 10;
+					e--;
+				}
+				d--;
+			}
+			c--;
+//	stop decrementing if min value is reached
+			if (e < 0) {
+				c = 0;
+				d = 0;
+				e = 0;
+				Sendto_LCD();
+				break;
+			}
+//	stop decrementing if SW2 is no longer pressed
+			if (P1IN != 2) {
+				break;
+			}
+//	send values to LCD, flash LED, and delay
+			Sendto_LCD();
+			P2OUT ^= 0x02;
+			i = 15000;
+			while (i > 0)
+				i--;
+		}
+	}
+}
+
+void Sendto_LCD(void) {
+	LCDSeg[0] = Char_Code[c];
+	LCDSeg[1] = Char_Code[d];
+	LCDSeg[2] = Char_Code[e];
+}
+
+//---------------------------------------------------------------------
+// Initialize the LCD system
+//---------------------------------------------------------------------
+void Init_LCD(void) {
+
+//	initialize the segment memory to zero to clear the LCD
+	for (n = 0; n < LCD_SIZE; n++)
+		LCDSeg[n] = 0;
+
+//	assign ports 5.2-5.4 are connected to COM1, COM2, COM3 of LCD
+	P5SEL = 0x1C;
+
+//	configure LCD control registers
+	LCDAVCTL0 = 0x00;
+	LCDAPCTL0 = 0x7E;
+	LCDACTL = 0x7d;
+}
